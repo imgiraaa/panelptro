@@ -1,22 +1,19 @@
-// api/create.js
-// Ini berjalan di Server Vercel (Backend), bukan di Browser. Aman dari CORS.
+import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
-    // 1. Konfigurasi (GANTI INI)
+    // --- KONFIGURASI PENTING (ISI DI SINI) ---
     const PANEL_URL = "https://myserver-panel.banditflow.cfd"; // Tanpa garis miring di akhir
     const API_KEY = "ptla_gjYPEvleIK3NPkPemrDwF7Z57HP2bA6Z35y67E4FLZc"; // API Key Admin (ptla)
-    
-    // ---------------------------------------------------------
+    // -----------------------------------------
 
-    // Setup Header CORS agar bisa diakses dari frontend
+    // Setup Header agar bisa diakses dari frontend
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
+        return res.status(200).end();
     }
 
     if (req.method !== 'POST') {
@@ -24,14 +21,14 @@ export default async function handler(req, res) {
     }
 
     try {
-        const data = req.body; // Vercel otomatis parse JSON body
+        const data = req.body;
 
-        // Validasi
+        // 1. Validasi
         if (!data.username || !data.email || !data.password) {
-            return res.status(400).json({ error: 'Data tidak lengkap (Username/Email/Password)' });
+            throw new Error('Data User tidak lengkap!');
         }
 
-        // --- STEP 1: CREATE USER ---
+        // 2. Buat User
         const userRes = await fetch(`${PANEL_URL}/api/application/users`, {
             method: 'POST',
             headers: {
@@ -49,14 +46,11 @@ export default async function handler(req, res) {
         });
 
         const userData = await userRes.json();
-
-        if (!userRes.ok) {
-            throw new Error(userData.errors?.[0]?.detail || "Gagal membuat User");
-        }
-
+        if (!userRes.ok) throw new Error(userData.errors?.[0]?.detail || "Gagal membuat User");
+        
         const userId = userData.attributes.id;
 
-        // --- STEP 2: CREATE SERVER ---
+        // 3. Buat Server
         const serverRes = await fetch(`${PANEL_URL}/api/application/servers`, {
             method: 'POST',
             headers: {
@@ -65,10 +59,10 @@ export default async function handler(req, res) {
                 'Accept': 'application/json',
             },
             body: JSON.stringify({
-                name: data.server_name || `Panel ${data.username}`,
+                name: data.server_name,
                 user: userId,
-                nest: 5, // Default Nest (Sesuaikan jika perlu)
-                egg: 18, // Default Egg (NodeJS)
+                nest: 5,
+                egg: 18,
                 docker_image: "ghcr.io/parkervcp/yolks:nodejs_18",
                 startup: "if [ -f /home/container/package.json ]; then npm install; fi; npm start",
                 environment: {
@@ -89,7 +83,7 @@ export default async function handler(req, res) {
                     allocations: 1
                 },
                 deploy: {
-                    locations: [1], // Node ID 1 (Ganti jika beda)
+                    locations: [1], // Default Node ID 1
                     dedicated_ip: false,
                     port_range: []
                 }
@@ -97,13 +91,9 @@ export default async function handler(req, res) {
         });
 
         const serverData = await serverRes.json();
+        if (!serverRes.ok) throw new Error("User dibuat, tapi Server Gagal: " + (serverData.errors?.[0]?.detail || "Unknown error"));
 
-        if (!serverRes.ok) {
-            // Jika server gagal, beri info tapi user sudah terbuat
-            throw new Error(`User ID ${userId} dibuat, tapi Server Gagal: ${serverData.errors?.[0]?.detail}`);
-        }
-
-        // --- SUKSES ---
+        // 4. Sukses
         return res.status(200).json({
             success: true,
             data: {
