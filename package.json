@@ -1,0 +1,11 @@
+{
+  "name": "gruu-panel-generator",
+  "version": "1.0.0",
+  "description": "Panel Generator for Vercel",
+  "scripts": {
+    "start": "node api/create.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.0"
+  }
+}
